@@ -110,17 +110,13 @@ class GPUStat(object):
 
 class GPUManager(object):
 
-    def __init__(self, preference=None):
+    def __init__(self):
         self.gpu_list = GPUManager.new_query()
         
         # attach additional system information
         self.hostname = platform.node()
         self.query_time = datetime.now()
         
-        # set perference
-        self.perference = np.ones(len(self.gpu_list))
-        if (preference is not None) and (len(preference) == len(self.gpu_list)):
-            self.preference *= np.array(preference)
             
 
     @staticmethod
@@ -150,12 +146,13 @@ class GPUManager(object):
         self.gpu_list = GPUManager.new_query()
         
     # choose gpu by highest memory available
+    # if available memory are same, choose lowest temperature
     def auto_choice(self, num=1):
         # sort by available memory
         
-        # find index with max available memory
-        indices = np.argsort(np.array([gpu.memory_available for gpu in self.gpu_list]) * self.perference)[::-1]
-        
+        # find index
+        indices = np.lexsort(([gpu.temperature for gpu in self.gpu_list],
+                              [-gpu.memory_available for gpu in self.gpu_list]))
         # num can not larger than all available gpu
         num = min(len(self.gpu_list), num)
 
@@ -168,6 +165,7 @@ if __name__=='__main__':
     
     gpu_manager = GPUManager()    
     gpu_manager.auto_choice(num=2)
+    print(os.environ['CUDA_VISIBLE_DEVICES'])
     
     node1 = tf.constant(3.0, dtype=tf.float32)
     node2 = tf.constant(4.0) # also tf.float32 implicitly
