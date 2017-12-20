@@ -158,7 +158,10 @@ class GPUManager(object):
 
         # set the environment
         os.environ['CUDA_VISIBLE_DEVICES']=','.join(str(i) for i in indices[:num])
-        
+
+    def manual_choice(self, index):
+        indices = index if type(index) == list else [index]
+        os.environ['CUDA_VISIBLE_DEVICES']=','.join(str(i) for i in indices) 
 
 if __name__=='__main__':
     import tensorflow as tf
@@ -167,6 +170,9 @@ if __name__=='__main__':
     gpu_manager.auto_choice(num=2)
     print(os.environ['CUDA_VISIBLE_DEVICES'])
     
+    gpu_manager.manual_choice(index=4)
+    print(os.environ['CUDA_VISIBLE_DEVICES'])
+
     node1 = tf.constant(3.0, dtype=tf.float32)
     node2 = tf.constant(4.0) # also tf.float32 implicitly
     print(node1, node2)
