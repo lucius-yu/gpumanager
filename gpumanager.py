@@ -131,7 +131,6 @@ class GPUManager(object):
             r'nvidia-smi --query-gpu={query_cols} --format=csv,noheader,nounits'.format(
                 query_cols=','.join(gpu_query_columns)
             ))
-
         for line in smi_output.split('\n'):
             if not line: continue
             query_results = line.split(',')
@@ -140,7 +139,6 @@ class GPUManager(object):
                          (col_name, col_value) in zip(gpu_query_columns, query_results)
                          })
             gpu_list.append(g)
-
         return gpu_list
 
     def update(self):
@@ -165,18 +163,15 @@ class GPUManager(object):
         indices = index if type(index) == list else [index]
         os.environ['CUDA_VISIBLE_DEVICES']=','.join(str(i) for i in indices) 
 
-    def allocate_mem(self, cuda_device=None):
-        # get cuda_device
-        cuda_device = int(os.getenv('CUDA_VISIBLE_DEVICES', '0').split(',')[0]) if cuda_device==None else cuda_device
-
+    def allocate_mem(self, cuda_device_id):
         # calculate memory
-        total = self.gpu_list[cuda_device].memory_total
-        used = self.gpu_list[cuda_device].memory_used
+        total = self.gpu_list[cuda_device_id].memory_total
+        used = self.gpu_list[cuda_device_id].memory_used
         max_mem = int(total * 0.9)
         block_mem = max_mem - used
 
         # allocate memory
-        x = torch.FloatTensor(256,1024,block_mem).cuda('cuda:0')
+        x = torch.FloatTensor(256,1024,block_mem).cuda(f'cuda:{cuda_device_id}')
 
         del x
 
@@ -189,11 +184,14 @@ if __name__=='__main__':
     print(f"manual selected gpu device = {os.environ['CUDA_VISIBLE_DEVICES']}")
 
     # automatic select with high memory avaiable
-    cuda_device = gpu_manager.auto_choice(num=1)
+    cuda_devices = gpu_manager.auto_choice(num=2)
     print(f"automatic selected gpu device = {os.environ['CUDA_VISIBLE_DEVICES']}")
     
-    # allocate the memory
-    x = gpu_manager.allocate_mem()
+    # clear the selection
+    os.unsetenv("CUDA_VISIBLE_DEVICES")
+
+    # allocate the memory on gpu with highest available memory
+    gpu_manager.allocate_mem(cuda_devices[0])
 
     # check status
     while True: 
