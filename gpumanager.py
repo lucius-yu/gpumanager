@@ -11,6 +11,9 @@ Part of code copied from gpustat
 import platform
 import numpy as np
 import os
+import time
+import torch
+import tensorflow as tf
 
 from subprocess import check_output
 from datetime import datetime
@@ -109,7 +112,6 @@ class GPUStat(object):
         return o
 
 class GPUManager(object):
-
     def __init__(self):
         self.gpu_list = GPUManager.new_query()
         
@@ -118,7 +120,6 @@ class GPUManager(object):
         self.query_time = datetime.now()
         
             
-
     @staticmethod
     def new_query():
         # 1. get the list of gpu and status
@@ -149,7 +150,6 @@ class GPUManager(object):
     # if available memory are same, choose lowest temperature
     def auto_choice(self, num=1):
         # sort by available memory
-        
         # find index
         indices = np.lexsort(([gpu.temperature for gpu in self.gpu_list],
                               [-gpu.memory_available for gpu in self.gpu_list]))
@@ -159,32 +159,50 @@ class GPUManager(object):
         # set the environment
         os.environ['CUDA_VISIBLE_DEVICES']=','.join(str(i) for i in indices[:num])
 
+        return indices[:num]
+
     def manual_choice(self, index):
         indices = index if type(index) == list else [index]
         os.environ['CUDA_VISIBLE_DEVICES']=','.join(str(i) for i in indices) 
 
+    def allocate_mem(self, cuda_device=None):
+        # get cuda_device
+        cuda_device = int(os.getenv('CUDA_VISIBLE_DEVICES', '0').split(',')[0]) if cuda_device==None else cuda_device
+
+        # calculate memory
+        total = self.gpu_list[cuda_device].memory_total
+        used = self.gpu_list[cuda_device].memory_used
+        max_mem = int(total * 0.9)
+        block_mem = max_mem - used
+
+        # allocate memory
+        x = torch.FloatTensor(256,1024,block_mem).cuda('cuda:0')
+
+        del x
+
+
 if __name__=='__main__':
-    import tensorflow as tf
-    
     gpu_manager = GPUManager()    
-    gpu_manager.auto_choice(num=2)
-    print(os.environ['CUDA_VISIBLE_DEVICES'])
-    
-    gpu_manager.manual_choice(index=4)
-    print(os.environ['CUDA_VISIBLE_DEVICES'])
 
-    node1 = tf.constant(3.0, dtype=tf.float32)
-    node2 = tf.constant(4.0) # also tf.float32 implicitly
-    print(node1, node2)
-    
-    # use part of memory 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
+    # manual select gpu
+    gpu_manager.manual_choice(index=0)
+    print(f"manual selected gpu device = {os.environ['CUDA_VISIBLE_DEVICES']}")
 
-    print(sess.run([node1, node2]))
+    # automatic select with high memory avaiable
+    cuda_device = gpu_manager.auto_choice(num=1)
+    print(f"automatic selected gpu device = {os.environ['CUDA_VISIBLE_DEVICES']}")
     
-    gpu_manager.update()   
-    for gpu in gpu_manager.gpu_list:
-        print(gpu.jsonify())
-    
+    # allocate the memory
+    x = gpu_manager.allocate_mem()
+
+    # check status
+    while True: 
+        # update gpu information
+        gpu_manager.update()
+
+        # print all gpu information
+        for gpu in gpu_manager.gpu_list:
+            print(gpu.jsonify())
+
+        # sleep 5 min
+        time.sleep(300)
